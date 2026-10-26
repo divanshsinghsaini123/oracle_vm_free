@@ -1,0 +1,81 @@
+name: Deploy OCI Always Free ARM VM
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      OCI_USER_ID: ${{ secrets.OCI_USER_ID }}
+      OCI_TENANCY_ID: ${{ secrets.OCI_TENANCY_ID }}
+      OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+      OCI_REGION: ${{ secrets.OCI_REGION }}
+      OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+      OCI_COMPARTMENT_ID: ${{ vars.OCI_COMPARTMENT_ID }}
+      OCI_SUBNET_ID: ${{ vars.OCI_SUBNET_ID }}
+      SSH_PUBLIC_KEY: ${{ vars.SSH_PUBLIC_KEY }}
+
+    steps:
+      - name: Check required configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in OCI_USER_ID OCI_TENANCY_ID OCI_FINGERPRINT OCI_REGION OCI_PRIVATE_KEY OCI_COMPARTMENT_ID OCI_SUBNET_ID SSH_PUBLIC_KEY; do
+            if [[ -z "${!name}" ]]; then
+              echo "Required GitHub secret or variable is missing: $name" >&2
+              exit 1
+            fi
+          done
+
+      - name: Configure OCI credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.oci"
+          umask 077
+          cat > "$HOME/.oci/config" <<EOF
+          [DEFAULT]
+          user=${OCI_USER_ID}
+          fingerprint=${OCI_FINGERPRINT}
+          tenancy=${OCI_TENANCY_ID}
+          region=${OCI_REGION}
+          key_file=$HOME/.oci/oci_api_key.pem
+          EOF
+          printf '%s\n' "$OCI_PRIVATE_KEY" > "$HOME/.oci/oci_api_key.pem"
+          chmod 600 "$HOME/.oci/config" "$HOME/.oci/oci_api_key.pem"
+
+      - name: Write SSH public key
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PUBLIC_KEY" > "$HOME/.ssh/oci_free_vm.pub"
+          chmod 600 "$HOME/.ssh/oci_free_vm.pub"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Create or retry VM deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes oci-free-vm@0.5.1 \
+            --json \
+            --yes \
+            --region "$OCI_REGION" \
+            --compartment-id "$OCI_COMPARTMENT_ID" \
+            --arch arm64 \
+            --shape VM.Standard.A1.Flex \
+            --ocpus 2 \
+            --memory 12 \
+            --ssh-key "$HOME/.ssh/oci_free_vm.pub" \
+            --public-ip true \
+            --network-mode existing \
+            --subnet-id "$OCI_SUBNET_ID"
