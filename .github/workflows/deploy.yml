@@ -14,18 +14,19 @@ jobs:
       OCI_USER_ID: ${{ secrets.OCI_USER_ID }}
       OCI_TENANCY_ID: ${{ secrets.OCI_TENANCY_ID }}
       OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
-      OCI_REGION: ${{ secrets.OCI_REGION }}
       OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
-      OCI_COMPARTMENT_ID: ${{ vars.OCI_COMPARTMENT_ID }}
-      OCI_SUBNET_ID: ${{ vars.OCI_SUBNET_ID }}
       SSH_PUBLIC_KEY: ${{ vars.SSH_PUBLIC_KEY }}
+      OCI_REGION: ${{ secrets.OCI_REGION }}
+      OCI_COMPARTMENT_ID: ocid1.tenancy.oc1..aaaaaaaaqnivfufn554ew3afkjdy6zioa4ertuw5l4evbflckgjgl3gczmfa
+      OCI_VCN_ID: ocid1.vcn.oc1.ap-mumbai-1.amaaaaaaq6xhtsqaqsxbudsanmtyyxsrbqqp3j53wbnq2kspqrxix4qg7sfa
+      OCI_SUBNET_ID: ocid1.subnet.oc1.ap-mumbai-1.aaaaaaaac7qncyssue3gbx6in3cwfvceuri6jbqpc6bwgcuhql7tuelsdh2a
 
     steps:
       - name: Check required configuration
         shell: bash
         run: |
           set -euo pipefail
-          for name in OCI_USER_ID OCI_TENANCY_ID OCI_FINGERPRINT OCI_REGION OCI_PRIVATE_KEY OCI_COMPARTMENT_ID OCI_SUBNET_ID SSH_PUBLIC_KEY; do
+          for name in OCI_USER_ID OCI_TENANCY_ID OCI_FINGERPRINT OCI_REGION OCI_PRIVATE_KEY SSH_PUBLIC_KEY; do
             if [[ -z "${!name}" ]]; then
               echo "Required GitHub secret or variable is missing: $name" >&2
               exit 1
@@ -69,13 +70,17 @@ jobs:
           npx --yes oci-free-vm@0.5.1 \
             --json \
             --yes \
+            --name divanshvm \
             --region "$OCI_REGION" \
             --compartment-id "$OCI_COMPARTMENT_ID" \
             --arch arm64 \
             --shape VM.Standard.A1.Flex \
             --ocpus 2 \
             --memory 12 \
+            --disk 50 \
             --ssh-key "$HOME/.ssh/oci_free_vm.pub" \
             --public-ip true \
             --network-mode existing \
-            --subnet-id "$OCI_SUBNET_ID"
+            --vcn-id "$OCI_VCN_ID" \
+            --subnet-id "$OCI_SUBNET_ID" \
+            --interval-seconds 900
